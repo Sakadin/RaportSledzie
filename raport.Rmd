@@ -1,0 +1,273 @@
+---
+title: "Spadek d³ugoœci œledzia oceanicznego na przestrzeni lat"
+author: "Piotr Przyby³owski"
+output:
+  html_document:
+    keep_md: yes
+    number_sections: yes
+    toc: yes
+    toc_depth: 2
+    toc_float: yes
+---
+Data generacji: `r Sys.Date()`
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Wstêp
+Poni¿szy raport traktowaæ bêdzie o stopniowym spadku d³ugoœci œledzia na przestrzeni ostatnich 60 lat. Przedstawione zostan¹ w nim potencjalne przyczyny tego zjawiska. Analizowane dane pobierane by³y z po³owów komercyjnych jednostek na przestrzeni ostatnich 60 lat. Podczas danego po³owu losowo wybierano od 50 do 100 sztuk œledzi, które poddano zmierzeniu. Raport od strony technicznej zosta³ wykonany przy u¿yciu Markdown oraz jêzyka R.Po przeprowadzenej analizie zebranych danych mo¿na przedstawiæ nastêpuj¹ce wnioski. Bezpoœredni wp³yw na d³ugoœæ œledzia ma to jak wiele pokarmu mo¿e spo¿yæ, czyli jaka jest dostêpnoœæ planktonu(niewielkie organizmy, niezdolne do poruszania siê, mog¹ siê jedynie biernie utrzymywaæ w stanie zawieszenia) w oceanach i morzach. Natomiast to jak wiele planktonu jest w stanie siê rozwin¹æ zale¿ne jest od dwóch czynników. Pierwszym z nich jest podwy¿szenie temperatury wody w oceanach i morzach, wraz ze wzrostem temperatury zaobserwowano spadek dostêpnoœci planktonu. Drugim czynnikiem jest poziom zasolenia wody, który musi mieæ odpowiedni¹ wartoœæ. Za du¿e lub za ma³e stê¿enie soli powoduje, ¿e warunki nie s¹ sprzyjaj¹ce rozwojowi planktonu.      
+
+
+# Przygotowanie do analizy danych
+W tej sekcji przedstawione bêd¹ dzia³ania, które wykonano przed docelow¹ analiz¹ danych.
+
+## Wykorzystane biblioteki
+```{r libraries, results='hide', message=FALSE, warning=FALSE}
+    library(tidyr)
+    library(functional)
+    library(knitr)
+    library(dplyr)
+    library(ggplot2)
+    library(plotly)
+    library(reshape2)
+    library(caret)
+    library(missForest)
+```
+
+## Powtarzalnoœæ wyników
+Zapewniona zostanie poprzez ustawienie ziarna generatora.
+
+```{r seed, results='hide', message=FALSE, warning=FALSE}
+    set.seed(144)
+```
+
+## Wczytanie danych
+
+```{r readData, results='hide', message=FALSE, warning=FALSE}
+    sledzieDF<-read.csv("sledzie.csv",
+                     colClasses = c("integer","numeric","numeric","numeric","numeric","numeric","numeric","numeric","numeric","numeric","numeric","numeric","numeric","numeric","integer","numeric"),
+                     na.strings = c("NA","?"),
+                     col.names = c("x","dlugosc","plankton1_1","plankton1_2","plankton2_1","plankton2_2","plankton3_1","plankton3_2","natezenie_polowu","roczny_narybek","roczne_natezenie_polowu","ryby_z_polowu","temperatura_wody","zasolenie_wody","miesiac","oscylacja_NA"))
+
+```
+Podczas wczytywania danych zdefiniowane zosta³y typy atrybutów, x oraz miesiac jako integer, pozosta³e numeric. Zmienione zosta³y równie¿ nag³ówki kolumn, by umo¿liwiæ szybk¹ orientacjê w zbiorze danych.
+
+```{r attributesNames, echo=FALSE,message=FALSE}
+atrybut<-c("x","dlugosc","plankton1_1","plankton1_2","plankton2_1","plankton2_2","plankton3_1","plankton3_2","natezenie_polowu","roczny_narybek","roczne_natezenie_polowu","ryby_z_polowu","temperatura_wody","zasolenie_wody","miesiac","oscylacja_NA")
+atrybut_oryginalnie<-c("x","length","cfin1","cfin2","chel1","chel2","lcop1","lcop2","fbar","recr","cumf","totaln","sst","sal","xmonth","nao")
+kable(cbind(atrybut,atrybut_oryginalnie))
+```
+
+# Analiza danych
+
+## Rozmiar zbioru i podstawowe statystyki
++ Zbiór zawiera 52581 wierszy, na które sk³ada siê 16 atrybutów, przedstawione w tabelach poni¿ej z podstawowymi statystykami. 
+  
+      ```{r basicSummary, echo=FALSE}
+  kable(summary(sledzieDF[,1:8]))
+  kable(summary(sledzieDF[,-(1:8)]))
+  ```
+  
+## Iloœæ unikatowych wartoœci poszczególnych atrybutów
+      ```{r uniqueLevels, echo=FALSE}
+  kable(sledzieDF %>% sapply(Compose(factor,levels,length)))
+  ```
+  
+## Przetworzenia brakuj¹cych wartoœci
+Do uzupe³nienia brakuj¹cych wartoœci wykorzystano bibliotekê missForest. Jej dzia³anie polega na tym, ¿e dla ka¿dego atrybutu wykonany jest algorytm random forest. Nastêpnie na podstawie znalezionych modelu przewidywane s¹ brakuj¹ce wartoœci dla poszczególnych atrybutów.  
+  
+      ```{r removeMissingValues, echo=FALSE,cache=TRUE,message=FALSE,warning=FALSE,results=FALSE,include=FALSE}
+  sledzieNMV<-missForest(sledzieDF)
+  sledzieDF<-sledzieNMV$ximp
+  ```
+
+## Analiza wartoœci atrybutów
++ dlugosc - wyra¿ona w centymetrach d³ugoœæ z³owionego œledzia, wykres przedstawiaj¹cy czêstoœæ wystêpowania poszczególnych d³ugoœci wyraŸnie przypomina rozk³ad normalny
++ plankton1_1 - dostêpnoœæ planktonu Calanus finmarchicus gat. 1 - jego wystêpowanie jest zdecydowanie najmniejsze w porównaniu z innymi typami, przyjmowane wartoœci zdominowane przez te bliskie 0
++ plankton1_2 - dostêpnoœæ planktonu Calanus finmarchicus gat. 2 - podobnie jak gatunek 1 tej rodziny jego wystêpowanie jest równie¿ niemal¿e znikome, pojawiaj¹ siê nieliczne wartoœci powy¿ej 2 jednostek
++ plankton2_1 - dostêpnoœæ planktonu Calanus helgolandicus gat. 1 - du¿a przewaga niskich wartoœci dostêpnoœci
++ plankton2_2 - dostêpnoœæ planktonu Calanus helgolandicus gat. 2 - niemal¿e równomierny rozk³ad wartoœci
++ plankton3_1, plankton3_2 - dostêpnoœæ wid³onogów gatunków 1 i 2, rozk³ad wartoœci bardzo podobny do rozk³adów wartoœci planktonu2_1 oraz planktonu 2_2, mo¿na zaobserwowaæ, ¿e kszta³t histogramów siê pokrywa, co mo¿e œwiadczyæ o du¿ej korelacji miêdzy tymi atrybutami
++ natezenie_polowu(ulamek pozostawionego narybku) - rozk³ad wartoœci przypominaj¹cy rozk³ad równomierny
++ roczny_narybek(ile sledzi rocznie) - najczêstsze s¹ wartoœci oko³o 400 000, im wiêksza wartoœæ tym mniejsza czêstotliwoœæ jej wystêpowania 
++ roczne_natezenie_polowu - rozk³ad ponownie przypomina rozk³ad równomierny,wartoœci skupione s¹ w okolicach czterech wartoœci 0.1, 0.2, 0.3, 0.4, wyraŸnie wiêcej obserwacji ma wartoœci oko³o 2.3,
++ ryby_z_polowu - ³¹czna iloœæ œledzi z³owionych w ramach po³owu - rozk³ad wartoœci przypominaj¹cy równomierny
++ temperatura_wody - najwiêksza iloœæ wartoœci w okolicach 13,87 , im wiêksza temperatura tym iloœæ obserwacji stopniowo spada
++ zasolenie_wody - wyraŸna dominacja wartoœci w okolicach 35,51, pozosta³e wartoœci wystêpuj¹ znacznie rzadziej
++ miesiac - wiêkszoœæ po³owów dokonano w miesi¹cach lipiec,sierpieñ,wrzesieñ,paŸdziernik
++ oscylacja_NA - oscylacja pó³nocnoatlantycka, rozk³ad wartoœci przypominaj¹cy równomierny z dwoma wartoœciamy, których czêstotliwoœæ wystêpowania jest nieznacznie wiêksza - okolice -3 oraz 0
+    
+    
+    
+    
+      ```{r histograms, warning=FALSE,message=FALSE,echo=FALSE,cache=TRUE}
+  melted1<-melt(sledzieDF[,2:5])
+  ggplot(melted1,aes(x = value,fill=..count..)) + 
+    facet_wrap(~variable,scales = "free_x") + 
+    geom_histogram()+theme_minimal()
+  
+  melted2<-melt(sledzieDF[,6:9])
+  ggplot(melted2,aes(x = value,fill=..count..)) + 
+    facet_wrap(~variable,scales = "free_x") + 
+    geom_histogram()+theme_minimal()
+  
+  melted3<-melt(sledzieDF[,10:13])
+  ggplot(melted3,aes(x = value,fill=..count..)) + 
+    facet_wrap(~variable,scales = "free_x") + 
+    geom_histogram()+theme_minimal()
+    
+  melted4<-melt(sledzieDF[,14:16])
+  ggplot(melted4,aes(x = value,fill=..count..)) + 
+    facet_wrap(~variable,scales = "free_x") + 
+    geom_histogram()+theme_minimal()
+  ```
+    
+## Korelacja pomiêdzy atrybutami
+  
++ Bardzo du¿a korelacja pomiêdzy nastêpuj¹cymi parami atrybutów plankton2_1 i plankton3_1 , plankton2_2 i plankton 3_2, natezenie polowu i roczne natezenie polowu
++ Du¿a ujemna korelacja pomiêdzy dwiema parami atrybutów oscylacja_NA i plankton2_1, oscylacja_NA i plankton3_1, a tak¿e ryby_z_polowu i roczne_natezenie_polowu
++ Warte zaznaczenia jest skorelowanie dlugosci sledzie z temperatur¹ wody maj¹ce wartoœæ -0,46
+    
+      ```{r corelMatrix, echo=FALSE}
+  cormat<- round(cor(sledzieDF,method="spearman"),2)
+
+  get_upper_tri <- function(cormat){
+    cormat[lower.tri(cormat)]<- NA
+    return(cormat)
+  }
+  
+  upper_tri <- get_upper_tri(cormat)
+  
+  meltCormat<- melt(upper_tri, na.rm = TRUE)
+  
+  ggplotly(
+  ggplot(data = meltCormat, aes(Var2, Var1, fill = value))+
+  geom_tile(color = "white")+
+  scale_fill_gradient2(low = "blue", high = "red", mid = "white",
+                       midpoint = 0, limit = c(-1,1), space = "Lab", 
+                        name="Korelacja\nSpearmana")+
+  theme_minimal()+ 
+  theme(axis.text.x = element_text(angle = 45, vjust = 1, 
+                                   size = 12, hjust = 1),axis.title.x = element_blank(),
+                                    axis.title.y = element_blank(),
+                                    panel.grid.major = element_blank(),
+                                    panel.border = element_blank(),
+                                    panel.background = element_blank(),
+                                    axis.ticks = element_blank())+
+  coord_fixed())
+  ```
+  
+## Wykres zale¿noœci d³ugoœci œledzia od czasu
++ wyraŸnie zauwa¿yæ mo¿na, ¿e miêdzy po³owami 10000 a 20000 nast¹pi³ wzrost d³ugoœci œledzia i najliczniejsze by³y okazy maj¹ce oko³o 27cm. 
++od oko³o 30000 o³owu zauwa¿yæ mo¿na spadek d³ugoœci œledzia
++pomiêdzy po³owami 40000-50000 najczêœciej wystêpuj¹ca d³ugoœæ œledzia oscyluje w okolicach 23 cm
+        ```{r herringSize, echo=FALSE,warning=FALSE}
+    ggplotly(
+    ggplot(sledzieDF,aes(x=x,y=dlugosc))+geom_hex()+theme_minimal()
+    )
+    
+  ```
+  
+# Regresor przewiduj¹cy rozmiar œledzia
+
+## Implementacja
++ Poszukiwane jest wyjaœnienie dlaczego œledŸ mala³ w czasie dlatego przy tworzeniu modelu pominiête zosta³y atrybuty x oraz miesiac
++ Pominiêto równie¿ plankton3_1 oraz plankton3_2 ze wzglêdu na bardzo wysok¹ korelacjê z odpowiednio plankton2_1 oraz plankton2_2
++ podzia³u na zbiór ucz¹cy i testowy dokonano w stosunku 7:3
++ podzia³ na zbiory ucz¹cy i walidacyjny wykonano przy pomocy piêciokrotnej kroswalidacji
++ algorytm wykorzystany do uczenia to random forest, wartoœæ parametru ntree zosta³a ustawiona na 10
++ do oceny trafnoœci regresji wykorzystano miarey RMSE oraz rsquared
++ w poni¿szej tabeli wyniki 3 modeli uzyskane dla zbioru ucz¹cego, jako finalny wybrany zosta³ model przy wartoœci parametru mtry=2
+      ```{r regresja, echo=FALSE,warning=FALSE,message=FALSE,cache=TRUE}
+ 
+ sledzieDF1<-sledzieDF%>%select(-c(plankton3_1,plankton3_2,miesiac,x))
+ 
+  ctrl <- trainControl(
+     # powtórzona ocena krzy¿owa
+     method = "repeatedcv",
+     # liczba podzia³ów
+     number = 2,
+    # liczba powtórzeñ
+     repeats = 5)
+     
+     inTraining <- 
+     createDataPartition(
+         # atrybut do stratyfikacji
+         y = sledzieDF1$dlugosc,
+         # procent w zbiorze ucz¹cym
+         p = .70,
+         # chcemy indeksy a nie listê
+         list = FALSE)
+         
+  sledzieTrain<-sledzieDF1[inTraining,]
+  sledzieTest<-sledzieDF1[-inTraining,]
+  
+  fitTune <- train(dlugosc ~ .,
+                  data = sledzieTrain,
+                  method = "rf",
+                  metric = c("RMSE"),
+                  preProc = c("center", "scale"),
+                  trControl = ctrl,
+                  importance=TRUE,
+                  ntree = 10)
+  ```
+  
+      ```{r regresjaWyniki1,echo=FALSE,warning=FALSE,message=FALSE}
+  kable(fitTune$results[,1:3])
+  ```
+  
++ Wyniki uzyskane dla zbioru testowego
+      ```{r regresjaWyniki2, echo=FALSE,warning=FALSE,message=FALSE}
+  predictions<-predict(fitTune,newdata = sledzieTest)
+  kable(postResample(pred = predictions, obs=sledzieTest$dlugosc))
+  ```
+  
++ Wykres przedstawiaj¹cy porównanie wartoœci rzeczywistych z wartoœciami uzyskanymi z regresji
+
+      ```{r regresjaWykres, echo=FALSE,warning=FALSE,message=FALSE}
+      testowo<-melt(cbind(sledzieTest$dlugosc,predictions))
+      ggplot(testowo,aes(x=Var1,y=value))+geom_point(alpha=0.3)+facet_grid(~Var2)+theme_minimal()+xlab("x")+ylab("dlugosc")
+  ```
+
+## Analiza wa¿noœci atrybutów znalezionego modelu regresji, dlaczego œledŸ zacz¹³ maleæ?
++ Najwa¿niejszym atrybutem w znalezionym modelu jest temperatura_wody, nastêpnie ryby_z_po³owu oraz plankton2_2. Mo¿na podejrzewaæ zatem ¿e bezpoœredni wp³yw na d³ugoœæ œledzia ma temperatura wody. Jednak takie wyjaœnienie nie jest do koñca trafne. Co wydaje siê byæ rzeczywist¹ przyczyn¹ spadku rozmiaru œledzia jest mniejsza dostêpnoœæ planktonu (ze znalezionego modelu bezpoœrednio wynika, ze wazny jest plankton2_2, poni¿ej dodatkowe porównanie czy dostêpnoœæ pozosta³ych tak¿e jest zale¿na od temperatury i wp³ywa na rozmiar œledzia  ). Mniej po¿ywienia przek³ada siê na mniejszy rozmiar ryb. Z kolei spadek dostêpnoœci planktonu, który potencjalnie jest bezpoœrednio bardziej zale¿ny od temperatury_wody.Ten wniosek, bezpoœrednio doprowadzi³ autora do kolejnych przemyœleñ, ¿e skoro wystêpowanie planktonu jest zale¿ne od temperatury wody to byæ mo¿e zale¿y tak¿e od zasolenia wody(uplasowa³o siê w znalezionym modelu jako czwarty najwa¿niejszy atrybut).
+    
+        ```{r analiza,echo=FALSE,warning=FALSE,message=FALSE}
+  kable(tibble::rownames_to_column(varImp(fitTune)$importance,var="atrybut")%>%arrange(desc(Overall)))
+  ```
+
++ Wykresy przedstawiaj¹ce dostêpnoœæ planktonu w punktach o danej d³ugoœci i w danym momencie
+    - Dostêpnoœæ plankton1_1 i plankton1_2 nie ma praktycznie ¿adnego wp³ywu na d³ugoœæ œledzia.
+    - Podczas wzrostu rozmiaru œledzia, (który nast¹pi³ pomiêdzy 10000 a 20000 jednostk¹ na osi x) dostêpnoœæ wszystkich planktonów poza wymienionymi w punkcie wy¿ej jest du¿a. Szczególnie wyraŸne s¹ skupiska o wysokiej dostêpnoœci planktonu2_1 oraz planktonu3_1. 
+  
+    
+```{r wykresyFinalD,echo=FALSE,warning=FALSE,message=FALSE,cache=TRUE}
+        
+      sledzieDFPlankton<-melt(sledzieDF[,c(1:8,13:14)],id.vars =c("x","zasolenie_wody","dlugosc","temperatura_wody"))
+      
+  ggplot(sledzieDFPlankton%>%filter(variable%in%c("plankton1_1","plankton1_2")),aes(x=x,y=dlugosc,col=value))+geom_point(alpha=0.05)+geom_smooth()+facet_grid(~variable)+scale_color_gradient2(low = "white", high = "blue")+theme_minimal()
+  ggplot(sledzieDFPlankton%>%filter(variable%in%c("plankton2_1","plankton2_2")),aes(x=x,y=dlugosc,col=value))+geom_point(alpha=0.05)+geom_smooth()+facet_grid(~variable)+scale_color_gradient2(low = "white", high = "blue")+theme_minimal()
+  ggplot(sledzieDFPlankton%>%filter(variable%in%c("plankton3_1","plankton3_2")),aes(x=x,y=dlugosc,col=value))+geom_point(alpha=0.05)+geom_smooth()+facet_grid(~variable)+scale_color_gradient2(low = "white", high = "blue")+theme_minimal()
+```
+  
++ Poni¿ej wykresy przedstawiaj¹ce dostêpnoœci planktonu w zale¿noœci od temperatury wody i czasu.
+      Mo¿na zauwa¿yæ, ¿e dostêpnoœci wszystkich wyró¿nionych typów planktonu maj¹ skupiska najwy¿szych wartoœci gdy temperatura ma wartoœæ w pobli¿u 13,5 lub mniej. Wraz ze wzrostem temperatury wody(wyraŸnie roœnie z czasem) maleje dostêpnoœæ planktonu.
+      
+```{r wykresyFinalTemp,echo=FALSE,warning=FALSE,message=FALSE,cache=TRUE}
+  ggplot(sledzieDFPlankton%>%filter(variable%in%c("plankton2_1","plankton2_2")),aes(x=x,y=temperatura_wody,col=value))+geom_point(alpha=0.05)+geom_smooth()+facet_grid(~variable)+scale_color_gradient2(low = "white", high = "blue")+theme_minimal()
+  ggplot(sledzieDFPlankton%>%filter(variable%in%c("plankton3_1","plankton3_2")),aes(x=x,y=temperatura_wody,col=value))+geom_point(alpha=0.05)+geom_smooth()+facet_grid(~variable)+scale_color_gradient2(low = "white", high = "blue")+theme_minimal()
+```
+  
++ Poni¿ej wykresy przedstawiaj¹ce dostêpnoœci planktonu w zale¿noœci od zasolenia wody i czasu.
+      Zauwa¿alna jest podobna prawid³owoœæ jak przy wykresach z temperatur¹, istniej¹ wartoœci zasolenia wody (pomiêdzy 35.45 oraz 35.50), w których dostêpnoœæ planktonu jest zdecydowanie wiêksza ni¿ w pozosta³ych punktach.
+    
+```{r wykresyFinalZas,echo=FALSE,warning=FALSE,message=FALSE,cache=TRUE}
+  ggplot(sledzieDFPlankton%>%filter(variable%in%c("plankton2_1","plankton2_2")),aes(x=x,y=zasolenie_wody,col=value))+geom_point(alpha=0.05)+geom_smooth()+facet_grid(~variable)+scale_color_gradient2(low = "white", high = "blue")+theme_minimal()
+  ggplot(sledzieDFPlankton%>%filter(variable%in%c("plankton3_1","plankton3_2")),aes(x=x,y=zasolenie_wody,col=value))+geom_point(alpha=0.05)+geom_smooth()+facet_grid(~variable)+scale_color_gradient2(low = "white", high = "blue")+theme_minimal()
+  #ggplot(sledzieDF,aes(x=x,y=zasolenie_wody,col=plankton2_2))+geom_point(alpha=0.1)+geom_smooth()
+  #ggplot(sledzieDF,aes(x=x,y=dlugosc,col=plankton2_2))+geom_point(alpha=0.1)
+```
+  
+# Wnioski
+  Na przestrzeni ostatnich 60 lat mo¿na zauwa¿yc stopniowy spadek d³ugoœci œledzia oceanicznego wy³awianego w Europie.Bezpoœrednio spowodowany jest on spadkiem dostêpnoœci planktonu(gatunków Calanus helgolandicus oraz wid³onogów). Natomiast coraz mniejsza dostêpnoœæ planktonu jest nastêpstwem dwóch czynników. Pierwszym z nich jest podwy¿szenie temperatury wody w oceanach i morzach. Drugim czynnikiem jest poziom zasolenia wody, który musi mieæ odpowiedni¹ wartoœæ by pozwoliæ na rozwój wiêkszej iloœci planktonu. 

@@ -55,7 +55,8 @@ Temporary Items
 
 # Windows
 # =========================
-
+# Cache folder
+raport_cache/
 # Windows image file caches
 Thumbs.db
 ehthumbs.db
