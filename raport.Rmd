@@ -24,7 +24,6 @@ W tej sekcji przedstawione bêd¹ dzia³ania, które wykonano przed docelow¹ analiz¹
 
 ## Wykorzystane biblioteki
 ```{r libraries, results='hide', message=FALSE, warning=FALSE}
-    library(tidyr)
     library(functional)
     library(knitr)
     library(dplyr)
@@ -83,6 +82,7 @@ Do uzupe³nienia brakuj¹cych wartoœci wykorzystano bibliotekê missForest. Jej dzi
   ```
 
 ## Analiza wartoœci atrybutów
++ x - chronologiczny numer po³owu, im wiêksza wartoœæ tym dane dotycz¹ póŸniejszego w czasie po³owu
 + dlugosc - wyra¿ona w centymetrach d³ugoœæ z³owionego œledzia, wykres przedstawiaj¹cy czêstoœæ wystêpowania poszczególnych d³ugoœci wyraŸnie przypomina rozk³ad normalny
 + plankton1_1 - dostêpnoœæ planktonu Calanus finmarchicus gat. 1 - jego wystêpowanie jest zdecydowanie najmniejsze w porównaniu z innymi typami, przyjmowane wartoœci zdominowane przez te bliskie 0
 + plankton1_2 - dostêpnoœæ planktonu Calanus finmarchicus gat. 2 - podobnie jak gatunek 1 tej rodziny jego wystêpowanie jest równie¿ niemal¿e znikome, pojawiaj¹ siê nieliczne wartoœci powy¿ej 2 jednostek
@@ -160,8 +160,8 @@ Do uzupe³nienia brakuj¹cych wartoœci wykorzystano bibliotekê missForest. Jej dzi
   
 ## Wykres zale¿noœci d³ugoœci œledzia od czasu
 + wyraŸnie zauwa¿yæ mo¿na, ¿e miêdzy po³owami 10000 a 20000 nast¹pi³ wzrost d³ugoœci œledzia i najliczniejsze by³y okazy maj¹ce oko³o 27cm. 
-+od oko³o 30000 o³owu zauwa¿yæ mo¿na spadek d³ugoœci œledzia
-+pomiêdzy po³owami 40000-50000 najczêœciej wystêpuj¹ca d³ugoœæ œledzia oscyluje w okolicach 23 cm
++ od oko³o 30000 o³owu zauwa¿yæ mo¿na spadek d³ugoœci œledzia
++ pomiêdzy po³owami 40000-50000 najczêœciej wystêpuj¹ca d³ugoœæ œledzia oscyluje w okolicach 23 cm
         ```{r herringSize, echo=FALSE,warning=FALSE}
     ggplotly(
     ggplot(sledzieDF,aes(x=x,y=dlugosc))+geom_hex()+theme_minimal()
